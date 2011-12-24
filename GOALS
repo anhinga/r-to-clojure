@@ -1,0 +1,31 @@
+
+Authors: anhinga, jsa-aerial, SimonHawkin
+
+The need for an R to Clojure conversion pipeline
+
+R is the dominant open-source language and software environment for
+statistical computing and graphics. The R community is very large and
+active. A few thousand open-source packages are available. An impressive
+example is the "caret" package for classification and regression training
+which offers a unified interface to more than a hundred different predictive
+modelling schemes. Moreover, the community is still growing and rapidly
+producing new software.
+
+Therefore it would be to a great advantage of the Clojure and Incanter
+community to have a working conversion pipeline capable of leveraging the
+scale and the growth rate of the R community.
+
+The R community would also benefit from the existence of a conversion
+pipeline to Clojure. Currently it is difficult to handle very large data in
+R, and its capabilities to take advantage of multiple cores and computer
+clusters are limited and cover only a small fraction of R functionality. A
+conversion pipeline to Clojure would offer a path towards wider
+parallelization of R software.
+
+The R is also known as a rather quircky language, and many organizations
+don't trust its runtime enough to put it onto real-time production servers
+where 100% uptime is expected. So the models trained in R are often
+re-written in a more robust industrial language such as, for example, Java,
+before being placed on a production server. A conversion pipeline to Clojure
+would make it possible to run R-trained models inside JVM and would
+eliminate many of those re-writes.

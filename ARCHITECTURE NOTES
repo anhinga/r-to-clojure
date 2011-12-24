@@ -1,0 +1,78 @@
+
+Authors: anhinga, jsa-aerial, SimonHawkin
+
+Exploring the architectures of an R to Clojure conversion pipeline
+
+
+1. When we talk about a conversion pipeline from R to Clojure, we are, first
+of all, talking about an R to Clojure compiler.
+
+There were many attempts to create compilers from R. Almost all of them
+remained at an experimental stage. A notable exception is the R "compiler"
+package, which is going into production, but it is tightly integrated with
+the existing R system and has R's own byte code as its target.
+
+This track record of not being able to move past experimental stages implies
+that any compiler from R to Clojure should be carefully architected in order
+to make sure that a software engineering approach which scales beyond
+experimental stages and into the production life cycle is selected.
+
+2. It is probably unrealistic to expect that all corner cases will be
+covered, especially given that R seems to be defined more by its actual
+practice, than by formal standards; so test suites and benchmarks will be
+major components to measure progress.
+
+A particularly rich pool for tests and benchmarks comes from the "caret"
+package for classification and regression training which offers a unified
+interface to more than a hundred different predictive modelling schemes.
+These predictive modelling schemes come from different and unrelated
+software groups and are implemented using varying software methods, "caret"
+merely provides a unifying interface on top of them.
+
+We propose to use the percentage of the predictive modelling schemes
+accessible via "caret" which would work in Clojure after compilation from R
+as one of the measures of success of this compilation project.  Going above
+50% will be a good indication of the validity of the approach, and
+continually tracking the successful addition of more cases can be a measure
+of project completion progress.
+
+Focusing on compiling "caret" is also a practical goal, because Incanter
+currently does not have a good selection of predictive modelling schemes, so
+we would like to bring those schemes inside Clojure/Incanter.
+
+3. R is essentially a Lisp with a thin syntactic layer on top of it, which
+should make it easier to compile it to another Lisp, such as Clojure, than
+to an entirely unrelated language. There is a spectrum of approaches to such
+a compiler.
+
+To really minimize the labor one can use the R built-in "parse" function and
+its reflection facilities or the logic of its "compiler" package to generate
+the annotated abstract syntax trees within R in an S-expression form. A
+Clojure backend would take those S-expressions as input and generate the
+Clojure code. The trade-off here is that one needs to have R installed and
+running, and that it would not be convenient to go down to the level of
+Clojure and change or add the code there.
+
+A more labor-intensive, but more powerful version would re-implement R
+directly in Clojure. One way to do it is to enable writing R code directly
+in Clojure via a top level macro, which would also enable users to mix
+Clojure code with the R code in the spirit described in the "Back to the
+Future: Lisp as a Base for a Statistical Computing System" paper by Ihaka
+and Lang.
+
+4. R is capable of interfacing with all kinds of non-R languages and
+systems. Obviously, the more of those capabilties is respected by an R to
+Clojure conversion pipeline, the wider is the coverage of the existing R
+software by such a pipeline.
+
+It is really vital that R capabilities of interfacing with C are respected
+by an R to Clojure conversion pipeline, because mixing C and R is quite
+common in the open-source R packages. There are many routes towards this
+goal, and different trade-offs are involved. One can use something like a
+JNI bridge to the C code, or one can compile that C code into JVM, either
+directly, or via compiling C to Java or to Clojure. It might be possible to
+re-use existing tools for some of these routes. We discuss the trade-offs
+and challenges involved. Currently we are leaning towards choosing
+Java Native Access (JNA, a lightweight bridge to C which uses libffi).
+
+
