@@ -135,7 +135,7 @@
          (let [[v exp] (take 2 (drop 1 body))
                v (cleaner v :lhs true)
                exp (cleaner exp)]
-           (if (and (sexp? v) (in (first v) [:aget]))
+           (if (and (sexp? v) (= (first v) 'aget))
              ;; An array var, use aset instead
              `(aset ~(nth  v 1) ~(nth v 2) ~exp)
              ;; Else, collect to scope vars and issue assignment for it
@@ -171,7 +171,7 @@
          "(" nil
          "{" 'do
          "for" 'Rfor
-         "[" :aget ; Could be used in FOR loop index var analysis
+         "[" 'aget ; Could be used in FOR loop index var analysis
          ":" 'Rdouble-array ; Broken, Needs :f in FOR sets
          ;; A lot of stuff "subsummed" here that must be dealt with.
          (read-string x))
