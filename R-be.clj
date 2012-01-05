@@ -7,13 +7,12 @@
   (:require [clojure.contrib.math :as math]
             [clojure.contrib.string :as str]
             [clojure.contrib.str-utils :as stru]
-	    [clojure.contrib.pprint :as pp]
+            [clojure.contrib.pprint :as pp]
             [clojure.set :as set]
             [clojure.contrib.seq :as seq]
             [clojure.zip :as zip]
             [clojure.contrib.io :as io]
-            [clj-shell.shell :as sh]
-            [edu.bc.fs :as fs])
+            [clj-shell.shell :as sh])
   (:use clojure.contrib.math
         edu.bc.utils
         [clojure.contrib.condition
@@ -55,7 +54,13 @@
   (or (vector? x)
       (seq? x)))
 
-(defn fold-forms [sexp]
+(defn fold-forms
+  "Currently not used and frankly a crappy hack in the first place!
+  So, when we push more toward a pure functional variant, this will
+  need replacing anyway!"
+
+  [sexp]
+
   (if (not (sexp? sexp))
     sexp
     (let [hd (first sexp)
@@ -89,8 +94,8 @@
                 ~@(fold-forms t2))
              (list (fold-forms (rest tail))))))
          ;;else
-	 (do ;(println "\n" :*** tail)
-	     (concat hd (fold-forms tail))))
+         (do ;(println "\n" :*** tail)
+             (concat hd (fold-forms tail))))
 
        :else
        (let [folded (map fold-forms sexp)]
@@ -99,7 +104,17 @@
            folded))))))
 
 
-(defn cleaner [sexp]
+
+(defmacro Rdouble-array [& args]
+  `(double-array (int ~(second args)) ~(first args)))
+
+(defmacro Rfor [i exp & body]
+    `(doseq [~i ~exp]
+       ~@body)))
+
+(def *scopes* :vars)
+
+(defn cleaner [sexp & {lhs :lhs :or {lhs false}}]
   ;;(prn :*** sexp)
   (cond
    (= 0 (count sexp)) ; get rid of empty blocks
@@ -110,15 +125,27 @@
    (let [[k & body] sexp]
      (case k
        :special-form
-       (if (in (second (first body)) ["<-"])
+       (if (not= (second (first body)) "<-")
+         (doall (keep cleaner body))
+
+         ;; Else, here we collect all mutated vars for later outer
+         ;; scope creation (in driver).  If this var has already been
+         ;; collected, insert an assignment for it (var-set ...)
+         ;;
          (let [[v exp] (take 2 (drop 1 body))
-               v (cleaner v)
+               v (cleaner v :lhs true)
                exp (cleaner exp)]
            (if (and (sexp? v) (in (first v) [:aget]))
+             ;; An array var, use aset instead
              `(aset ~(nth  v 1) ~(nth v 2) ~exp)
-             `(let [~v ~exp]
-                ~@(keep cleaner (drop 3 body)))))
-         (doall (keep cleaner body)))
+             ;; Else, collect to scope vars and issue assignment for it
+             (let [body (drop 3 body) ; move to next exps in this body
+                   setform `(var-set ~v ~exp)]
+               (when-not (get @*scopes* v)
+                 (swap! *scopes* #(assoc %1 %2 [(gen-uid) exp]) v))
+               (if (seq body)
+                 (cons setform (keep cleaner body))
+                 setform)))))
 
        :call-closure
        (doall (keep cleaner body))
@@ -136,15 +163,16 @@
    (let [[k x] sexp]
      (case k
        :symbol
-       (read-string x)
+       (let [x (read-string x)]
+         (if (and (get @*scopes* x) (not lhs)) `(var-get ~x) x))
 
        :op ; these things really should be like :special-form, et.al.
        (case x
          "(" nil
          "{" 'do
-         "for" 'for
+         "for" 'Rfor
          "[" :aget ; Could be used in FOR loop index var analysis
-         ":" 'double-array ; Broken, Needs :f in FOR sets
+         ":" 'Rdouble-array ; Broken, Needs :f in FOR sets
          ;; A lot of stuff "subsummed" here that must be dealt with.
          (read-string x))
 
@@ -158,8 +186,29 @@
    (keep cleaner sexp)))
 
 
+(defn driver [sexp]
+  (binding [*scopes* (atom {})]
+    (let [raw (cleaner sexp)
+          func-name (nth raw 1)
+          func-forms (nth raw 2)
+          func-params (vec (rest (second func-forms)))
+          func-body (rest (nth func-forms 2))
+          nv-map (reduce (fn[m [k v]] (assoc m k v)) {}
+                         (map (fn[[k [o v]]] [k v])
+                              (sort-by (fn[[k v]] (first v))
+                                       (dissoc @*scopes* func-name))))
+          nv-vec (vec (interleave (keys nv-map) (vals nv-map)))
+          func-body `(with-local-vars ~nv-vec
+                       ~@func-body)]
+      `(defn ~func-name ~func-params ~func-body))))
 
+
+
+
+(pp/pprint (driver *R-poly*))
 (pp/pprint (fold-forms (cleaner *R-poly*)))
+
+
 
 (fold-forms
  '(let [x (function (:params n x)
