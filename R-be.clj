@@ -36,16 +36,12 @@
 
 
 
-;;; Primary test AST...
+;;; Primary test AST as output from R Front End parser
 ;;;
 (def *R-poly*
      [:special-form [:op "<-"] [:symbol "trpol2"] [:special-form [:op "function"] [:params [:arg "n"] [:arg "x"]] [:special-form [:op "{"] [:special-form [:op "<-"] [:symbol "mu"] [:double 10]] [:special-form [:op "<-"] [:symbol "pu"] [:double 0]] [:special-form [:op "<-"] [:symbol "pol"] [:call-builtin [:op ":"] [:double 1] [:double 100]]] [:special-form [:op "<-"] [:symbol "tp1"] [:double 2]] [:special-form [:op "<-"] [:symbol "tm1"] [:call-builtin [:op "/"] [:double 1] [:double 2]]] [:special-form [:op "for"] [:symbol "i"] [:call-builtin [:op ":"] [:double 1] [:symbol "n"]] [:special-form [:op "{"] [:special-form [:op "for"] [:symbol "j"] [:call-builtin [:op ":"] [:double 1] [:double 100]] [:special-form [:op "{"] [:special-form [:op "<-"] [:symbol "mu"] [:call-builtin [:op "*"] [:call-builtin [:op "("] [:call-builtin [:op "+"] [:symbol "mu"] [:symbol "tp1"]]] [:symbol "tm1"]]] [:special-form [:op "<-"] [:special-form [:op "["] [:symbol "pol"] [:symbol "j"]] [:symbol "mu"]]]] [:special-form [:op "<-"] [:symbol "s"] [:double 0]] [:special-form [:op "for"] [:symbol "j"] [:call-builtin [:op ":"] [:double 1] [:double 100]] [:special-form [:op "{"] [:special-form [:op "<-"] [:symbol "s"] [:call-builtin [:op "+"] [:call-builtin [:op "*"] [:symbol "x"] [:symbol "s"]] [:special-form [:op "["] [:symbol "pol"] [:symbol "j"]]]]]] [:special-form [:op "<-"] [:symbol "pu"] [:call-builtin [:op "+"] [:symbol "s"] [:symbol "pu"]]]]] [:call-closure [:symbol "print"] [:symbol "pu"]]] []]])
 
 
-       (let [[[k v] & body] body]
-         (if (= v "{")
-           (conj (map cleaner body) :do)
-           (conj (map cleaner body) (keyword (second (first body))))))
 
 
 (def +R-ns+ (find-ns 'edu.bc.bio.R-be))
@@ -53,6 +49,7 @@
 (defn sexp? [x]
   (or (vector? x)
       (seq? x)))
+
 
 (defn fold-forms
   "Currently not used and frankly a crappy hack in the first place!
@@ -105,21 +102,45 @@
 
 
 
+;;; A palette macro for making insane R array definitions a little
+;;; more sane w/o front end parser support.
+;;;
 (defmacro Rdouble-array [& args]
   `(double-array (int ~(second args)) ~(first args)))
 
+
+;;; This really needs to be made better - currently _realizes_ the
+;;; java array as a seq and then moves over that. UGH!
+;;;
 (defmacro Rfor [i exp & body]
     `(doseq [~i ~exp]
        ~@body)))
 
+
+;;; The intent here is that this could be a _stacking_ scope
+;;; mechanism.  Currently it does NOT do that, but easily could be
+;;; changed to do that.
+;;;
+;;; Bound afresh for each call to Rcode-gen
+;;;
 (def *scopes* :vars)
 
+
+;;; This has mutated to be more than just a cleanup pass.  Which means
+;;; that it should be refactored!  Currently it also does most of the
+;;; code generation as well.  So, it isn't even named correctly
+;;; anymore!!
+;;;
 (defn cleaner [sexp & {lhs :lhs :or {lhs false}}]
   ;;(prn :*** sexp)
   (cond
+
    (= 0 (count sexp)) ; get rid of empty blocks
    nil
 
+   ;; This case handles situations where you have a primitive sexp at the
+   ;; front with its attendant body (which may be null!!
+   ;;
    (and (keyword? (first sexp))
         (> (count sexp) 2))
    (let [[k & body] sexp]
@@ -158,6 +179,9 @@
        :params
        (conj (keep cleaner body) :params)))
 
+   ;; This case is basically the simple primitive sexps denoting
+   ;; primitive elements (symbols, ops, etc.)
+   ;;
    (and (keyword? (first sexp))
         (= (count sexp) 2))
    (let [[k x] sexp]
@@ -186,7 +210,7 @@
    (keep cleaner sexp)))
 
 
-(defn driver [sexp]
+(defn Rcode-gen [sexp]
   (binding [*scopes* (atom {})]
     (let [raw (cleaner sexp)
           func-name (nth raw 1)
@@ -205,58 +229,45 @@
 
 
 
-(pp/pprint (driver *R-poly*))
-(pp/pprint (fold-forms (cleaner *R-poly*)))
+(pp/pprint (Rcode-gen *R-poly*))
+
+;;; Yields the following (though this is manually cleaned up wrt code
+;;; alignment and explicit clojure.core name space prefixes removed
+;;;
+(defn trpol2 [n x]
+  (with-local-vars
+      [s 0.0
+       tm1 (/ 1.0 2.0)
+       tp1 2.0
+       pol (Rdouble-array 1.0 100.0)
+       pu 0.0
+       mu 10.0]
+    (var-set mu 10.0)
+    (var-set pu 0.0)
+    (var-set pol (Rdouble-array 1.0 100.0))
+    (var-set tp1 2.0)
+    (var-set tm1 (/ 1.0 2.0))
+    (Rfor i (Rdouble-array 1.0 n)
+          (do (Rfor j (Rdouble-array 1.0 100.0)
+                    (do (var-set mu (* (+ (var-get mu) (var-get tp1))
+                                       (var-get tm1)))
+                        (aset (var-get pol) j (var-get mu))))
+              (var-set s 0.0)
+              (Rfor j (Rdouble-array 1.0 100.0)
+                    (do (var-set s (+ (* x (var-get s))
+                                      (aget (var-get pol) j)))))
+              (var-set pu (+ (var-get s) (var-get pu)))))
+    (print (var-get pu))))
+
+;;; A run:
+edu.bc.bio.R-be> (time (trpol2 5000 0.2))
+12500.0"Elapsed time: 14049.346975 msecs"
+nil
 
 
-
-(fold-forms
- '(let [x (function (:params n x)
-                    (do (clojure.core/let [mu 10.0])
-                        (clojure.core/let [pu 0.0])
-                        (clojure.core/let [pol (double-array 1.0 100.0)])
-                        (clojure.core/let [tp1 2.0])
-                        (clojure.core/let [tm1 (/ 1.0 2.0)])
-                        (for i (double-array 1.0 n))))]))
-
-
-
-
-
-
-(:set! trpol2
-       (function (:params n x)
-                 (do (:set! mu 10.0)
-                     (:set! pu 0.0)
-                     (:set! pol (:make-array 1.0 100.0))
-                     (:set! tp1 2.0)
-                     (:set! tm1 (/ 1.0 2.0))
-                     (for i (:make-array 1.0 n)
-                          (do (for j (:make-array 1.0 100.0)
-                                   (do (:set! mu (* (+ mu tp1) tm1))
-                                       (:set! (:aget pol j) mu)))
-                              (:set! s 0.0)
-                              (for j (:make-array 1.0 100.0)
-                                   (do (:set! s (+ (* x s) (:aget pol j)))))
-                              (:set! pu (+ s pu))))
-                     (print pu))
-                 ()))
-
-
-
-
-
-(defn walk-special-form [n]
-  (let [[_ op & body] n]
-    ))
-
-
+;;; ----------  Experiments and interactive fooling around below ------
 
 (def +branches+ [:special-form :call-closure :call-builtin :params])
-
-
-
-
 
 
 (defn array? [x] (-> x class .isArray))
