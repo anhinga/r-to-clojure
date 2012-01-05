@@ -1,0 +1,6 @@
+STATUS (Dec.23, 2011)
+
+There is a working parser from R to S-expressions,
+plus some benchmarks comparing the performance
+of R and Clojure, plus some experiments with
+transformations of S-expressions. 
