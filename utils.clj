@@ -1,4 +1,4 @@
-(ns edu.bc.utils
+(ns RClj.utils
 
   "General utility functions and macros.  Basically these resources are
    fairly general and intended to be usable on most any project"
@@ -12,7 +12,8 @@
             [clojure.contrib.io :as io]
             [clojure.contrib.properties :as prop]
             [clojure.xml :as xml]
-            [edu.bc.fs :as fs])
+            [RClj.fs :as fs]
+	    )
 
   (:use [clojure.contrib.condition
          :only [raise handler-case *condition*

@@ -151,7 +151,7 @@ parse.to.sexp <- function(file = "", n = NULL, text = NULL,
 
 #parse.to.sexp(text="x<-1+2; y<-x+5; z=y+4")
 #parse.to.sexp(file<-"copy-R2Sexp.R")
-parse.to.sexp(file<-"test.R")
+parse.to.sexp(file<-"R2Clj-input.R")
 #parse.to.sexp(text=".C(\"foo\", n<-as.integer(5), x<-as.double(rnorm(5)))")
 #parse.to.sexp(text="c(1,2+3,4)")
 #parse.to.sexp(text="if (2 == 3) {parse(\"a+b\")}")
